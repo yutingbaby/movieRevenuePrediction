@@ -1,11 +1,9 @@
 # TMDB Box Office Prediction: Predict Movie Revenue
 ### Programming Language: R
 
+#### Overview:
 In this TMDB Box Office Prediction project, We aimed at predicting the revenue for movies using some attributes of movies. We tried several techniques including random forest, text mining, extreme gradient boosting, clustering, neural network, and SVM. Finally, we learned that xgboost with text mining is the best one. 
-We found that the most important variables that influence a movie’s revenue are:
-#### budget, popularity, number of casts & crews and sentiments in a movie overview description. 
-
-In conclusion part, we recommended several ways for movie producers to generate higher revenue.
+We found that the most important variables that influence a movie’s revenue are: budget, popularity, number of casts & crews and sentiments in a movie overview description. In conclusion part, we recommended several ways for movie producers to generate higher revenue.
 
 #### Statement of the problem or question(s) being addressed
 Nowadays where movies made nearly $12 billion in 2018, the film industry is more popular than ever. But what movies make the most money at the box office? How much does a director matter? Or the budget? Or the genres? These are the questions we would like to answer.
