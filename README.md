@@ -6,8 +6,6 @@ In this TMDB Box Office Prediction project, We aimed at predicting the revenue f
 We found that the most important variables that influence a movie’s revenue are: budget, popularity, number of casts & crews and sentiments in a movie overview description. In conclusion part, we recommended several ways for movie producers to generate higher revenue.
 
 
-/n
-/n
 #### Statement of the problem or question(s) being addressed
 Nowadays where movies made nearly $12 billion in 2018, the film industry is more popular than ever. But what movies make the most money at the box office? How much does a director matter? Or the budget? Or the genres? These are the questions we would like to answer.
 For this project, we studied metadata on over 7,000 past films and applied EDA and predictive analysis. Some of our variables are numeric, and some are texts. 
