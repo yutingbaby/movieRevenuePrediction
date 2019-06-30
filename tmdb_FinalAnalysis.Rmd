@@ -1,0 +1,145 @@
+---
+title: "TMDB_FinalAnalysis"
+output: html_document
+---
+
+import all the libraries that are needed:
+```{r}
+library(caret)
+library(cluster)
+library(flexclust)
+library(xgboost)
+```
+
+Read in the cleaned data sets:
+```{r}
+train_cluster = read.csv("train_clean2.csv")
+test_cluster = read.csv("test_clean2.csv")
+
+```
+
+
+#final model:
+After all the experiments with random forest, xgboost, xgboost with clustering first.etc, we found that xgboost with dummy variables give us the best test rmsle result. So we will do xgboost as our final model.
+
+Check the dataframe first and drop some columns that we won't use in clustering:
+We will drop columns that are texts, scaled data, and revenue, but keep logged revenue.
+```{r}
+head(train_cluster)
+
+drop_var3=c("X.1","X","id","original_title","overview","tagline","title","Keywords","revenue", "release_date","budget","budget2","popularity2","runtime2","numberOfGenres2","numberOfcasts2","numberOfcrews2","numberOfcompanies2","numberOflang2","numberOfcoun2","revenue2","mean1") 
+drop_var4=c("X.1","X","original_title","overview","tagline","title","Keywords","revenue", "release_date","budget","budget2","popularity2","runtime2","numberOfGenres2","numberOfcasts2","numberOfcrews2","numberOfcompanies2","numberOflang2","numberOfcoun2","revenue2","mean1") 
+train_cluster[,drop_var3]<-list(NULL)
+test_cluster[,drop_var4]<-list(NULL)
+head(train_cluster)
+```
+
+We have categorical variables such as original_language, week_day and month, which are not accepable for xgboost.
+We will dummy them:
+```{r}
+train_cluster$month <- as.factor(train_cluster$month) #month should be a categorical variable
+dmy <- dummyVars(" ~ original_language + week_day+month", data = train_cluster, fullRank=T)
+dummy_df_train <- data.frame(predict(dmy, newdata = train_cluster))
+train_cluster <- cbind(train_cluster,dummy_df_train) #combine dummies in the data set
+drop <- c('original_language', 'week_day','month')
+# # our train data have more dummy levels:
+# [1] "original_language.fa"
+# [1] "original_language.mr"
+# [1] "original_language.nb"
+# [1] "original_language.vi"
+drop <- c(drop, "original_language.fa", "original_language.mr", "original_language.nb","original_language.vi")
+train_cluster[,drop] <-list(NULL)
+
+#do the same for test data
+test_cluster$month <- as.factor(test_cluster$month) #month should be a categorical variable
+dmy <- dummyVars(" ~ original_language + week_day+month", data = test_cluster, fullRank=T)
+dummy_df_test <- data.frame(predict(dmy, newdata = test_cluster))
+test_cluster <- cbind(test_cluster,dummy_df_test)
+drop <- c('original_language', 'week_day','month')
+# # our test dataset have more levels. we will drop:
+# [1] "original_language.bm"
+# [1] "original_language.ca"
+# [1] "original_language.is"
+# [1] "original_language.ka"
+# [1] "original_language.kn"
+# [1] "original_language.th"
+# [1] "original_language.xx"
+drop <- c(drop,"original_language.bm","original_language.ca","original_language.is","original_language.ka", "original_language.kn",
+          "original_language.th","original_language.xx" )
+test_cluster[,drop] <-list(NULL)
+```
+
+Split the train data into train and validation data sets:
+```{r}
+set.seed(617)
+split = sample(1:nrow(train_cluster),size = 0.7*nrow(train_cluster))
+train_model = train_cluster[split,]
+validation_model = train_cluster[-split,]
+```
+
+In previous experiments, we found that our train rmsle is much smaller than our validation rmsle, which means our model is overfit. So we have tuned the paramters with different numbers, and we found that a nrounds of 500 gives us the best result so far.
+
+Save the log.revenue label separetly and remove it from the dataset:
+```{r}
+train_modelLabel = train_model$log.revenue
+validation_modellLabel = validation_model$log.revenue
+
+train_model$log.revenue = NULL
+validation_model$log.revenue=NULL
+```
+
+xgboost model:
+```{r}
+  xgb_train=as.matrix(train_model)
+  params = list(
+  eta = 0.01,
+  max_depth = 50,
+  min_child_weight = 7,
+  colsample_bytree = 1)
+  set.seed(123)
+  
+  xgb.fit.final = xgboost(
+    params = params,
+    data = xgb_train,
+    label = train_modelLabel,
+    nrounds = 400,
+    subsample=0.55,
+    objective = "reg:linear",
+    print_every_n = 10)
+  
+  # for prediction
+  xgb_scoring=as.matrix(validation_model)
+  pred= predict(xgb.fit.final,newdata=xgb_scoring)
+  rmsle = sqrt(mean((pred - validation_modellLabel)^2)); rmsle
+```
+
+Our train rmsle is:1.019681 
+Our validation rmsle is:1.921689
+It's the best smallest difference between train vs.validation we got so far. Let's see how it performs on real test dataset:
+```{r}
+  testLabel=test_cluster$id
+  test_cluster$id = NULL
+  
+  xgb_real_test=as.matrix(test_cluster)
+  pred.test= predict(xgb.fit.final,newdata=xgb_real_test)
+  pred.test_nolog=exp(pred.test)-1
+  
+  submission1= data.frame(id = testLabel, revenue = pred.test_nolog)
+  write.csv(submission1, 'submissionNoCluster5.csv',row.names = F)
+```
+
+Our kaggle score is: 2.18789
+our best score so far! This is our final analysis.
+
+Let's now check what's the important variables in our model:
+```{r}
+importance_matrix<-xgb.importance(model =xgb.fit.final)
+xgb.plot.importance(importance_matrix[1:20,])
+```
+
+#conclusuion and insights
+
+
+
+
+
