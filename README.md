@@ -13,5 +13,5 @@ For this project, we studied metadata on over 7,000 past films and applied EDA a
 The goal of our project is to find out the important factors that would influence a movie’s revenue, and build a predictive model to forecast a movie’s revenue. The error measure we used is rmsle. Generally speaking, smaller rmsle means smaller error and better accuracy. With the help of our analysis, the production companies will be able to enhance a movie’s revenue by making adjustments to relevant factors, such as release data, and control the risk of producing movies.
 
 
-For more analysis details, please read the project on my [website] (https://yutinggong.github.io/)
+For more analysis details, please read the project on my website (https://yutinggong.github.io/).
 
