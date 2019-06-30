@@ -1,0 +1,768 @@
+---
+title: "BoxOfficePrediction"
+author: "MianchunLu, Yuting Gong, Guangxu Luo, Cijun Sun"
+date: "March 7, 2019"
+output: html_document
+---
+
+```{r warning=FALSE}
+#Sys.setenv(JAVA_HOME='C:/Program Files/Java/jdk-11.0.2')
+library(qdap) #text mining
+library(stringr) #text mining
+library(dplyr) #data manipulation
+library(tidyr)
+library(ggplot2) #visualization
+library(corrplot) #visualization
+library(cowplot) #visualization
+library(wordcloud) #wordcloud
+library(tidytext) #text mining
+library(igraph)
+library(Amelia)
+library(lubridate)
+library(reshape)
+library(knitr)
+library(tidyverse)
+library(DT)
+
+setwd('/Users/yutinggong/Desktop/Data/tmdb-box-office-prediction')
+train=read.csv("train_raw.csv", stringsAsFactors = FALSE, na.strings = c("","#N/A","[]", 0))
+test=read.csv("test_raw.csv", stringsAsFactors = FALSE,na.strings = c("","#N/A","[]", 0))
+```
+
+```{r}
+colnames(train)[1]="id"
+colnames(test)[1]="id"
+```
+
+
+```{r}
+budget.name<- train$budget
+genres.name <- train$numberOfGenres
+ori.language<- train$original_language
+ori.title <- train$original_title
+popularity.name<- train$popularity
+date.name<- train$release_date
+runtime.name<- train$runtime
+status.name <- train$status
+```
+# Step1: Exploratory Data Analysis
+EDA helps us to understand the data better and gives us inspirations on how to clean, fix, reshape, rescale and combine data.
+
+Train dataset has 3000 observations and 23 variables. Test dataset has 4398 observations and 22 variables. Firstly, we check out the type of each variables and examine the missing values.
+```{r}
+str(train)
+```
+
+```{r}
+colnames(train)
+colnames(test)
+```
+
+## Correlations between numeric variables and target revenue
+```{r pressure}
+#all numeric variables correlation map
+numericVars <- which(sapply(train, is.numeric)) #index numeric variables
+numericVarNames <- names(numericVars) #saving names vector for use later on
+cat('There are', length(numericVars), 'numeric variables, which are', numericVarNames)
+cor_numVar <- cor(train[,numericVars], use="pairwise.complete.obs") #correlations of all numeric variables
+corrplot.mixed(cor_numVar, tl.col="black", tl.pos = "lt")
+```
+
+All numeric variables are positiviely correlated with revenue, especially budget and popularity have strong correlations.
+So we will put special attention to these data's missing situation and fix any problems with them.
+
+##EDA variable: original language
+```{r }
+#this frequency table show us the top ten most frequent languages of each movie
+freq_terms(text.var = ori.language,top = 10)
+#From this plot we can see the distribution of different languages.
+plot(freq_terms(text.var=ori.language),top=10,stopwords = Top200Words)
+```
+
+English is the most frequently used language
+
+## EDA variable: Revenue
+Let's look at our target variable.
+```{r warning= FALSE}
+#{revenue} no missing value
+sum(is.na(train$revenue))
+ggplot(data=train,aes(x=revenue))+
+  geom_histogram()+
+  scale_x_continuous(labels = scales::comma)
+
+count(train[train$revenue > 750000000,c('id','revenue')])
+#some outliers (30 movies) have revenue over 750,000,000
+#change the scale of the distribution so we can see the majority revenue clearly
+ggplot(data=train,aes(x=revenue))+
+  geom_histogram()+
+  scale_x_continuous(labels=scales::comma, lim = c(0, 750000000))+
+  scale_y_continuous(lim=c(0,600))
+
+```
+
+Revenue distribution has a VERY high skewness! Only 30 movies have revenue over 750,000,000, we scale the revenue to 0 to 750,000,000 so that we can see the distribution more clearly.
+We transformed revenue data by using log:
+```{r warning= FALSE}
+ggplot(data=train,aes(x=log(revenue)))+
+  geom_histogram()
+```
+
+This looks slightly better, more like a normal distribution.
+
+##EDA variable: popularity
+```{r }
+#positive correlation between popularity and revenue(0.4614603)
+cor(popularity.name,train$revenue)
+#[graph]movie popularity and revenue
+ggplot(data=train,aes(x=popularity.name,y=revenue))+
+  geom_smooth()+geom_point()
+```
+
+At first the revenue rise as the popularity increase, but after the popularity increased to a certain degree, revenue begin to go down.
+
+##EDA variable:overview
+```{r}
+#sentimental analysis for overview(chart)
+train%>%
+unnest_tokens(output = word, input = overview)%>%
+inner_join(get_sentiments('nrc'))%>%
+group_by(sentiment)%>%
+count()%>%
+ggplot(aes(x=reorder(sentiment,X = n),y=n,fill=sentiment))+geom_col()+guides(fill=F)+coord_flip()
+
+#sentimental wordcloud for overview
+wordcloudData = 
+train%>%
+unnest_tokens(output=word,input=overview)%>%
+anti_join(stop_words)%>%
+inner_join(get_sentiments('bing'))%>%
+ungroup()%>%
+count(sentiment,word,sort=T)%>%
+spread(key=sentiment,value = n,fill=0)%>%
+data.frame()
+rownames(wordcloudData) = wordcloudData[,'word']
+wordcloudData = wordcloudData[,c('positive','negative')]
+set.seed(617)
+comparison.cloud(term.matrix = wordcloudData,scale = c(2,0.5),max.words = 200, rot.per=0)
+```
+
+
+#Step2: Examine missing values
+A lot of variables have missing values. We will look into them one by one and try to impute missing values. 
+```{r}
+colnames(train)[colSums(is.na(train)) > 0]
+sum(is.na(budget.name)) #
+sum(is.na(genres.name)) #
+sum(is.na(ori.language))
+sum(is.na(ori.title))
+sum(is.na(train$overview))#
+sum(is.na(train$popularity))
+sum(is.na(train$production_companies))#
+sum(is.na(train$production_countries))#
+sum(is.na(train$release_date))
+sum(is.na(train$runtime))#
+sum(is.na(train$spoken_languages))#
+sum(is.na(train$status))
+sum(is.na(train$tagline))#
+sum(is.na(train$title))
+sum(is.na(train$Keywords))#
+sum(is.na(train$cast))
+sum(is.na(train$crew))#
+sum(is.na(train$revenue))
+```
+
+We fill missing values for numeric data first: with the median. Sometimes mean can have some bias so the median could work better. We will deal with missing values in categorical variables later one by one.
+
+```{r}
+train$runtime[is.na(train$runtime)] <- median(train$runtime, na.rm= TRUE)
+train$budget[is.na(train$budget)] <- median(train$budget, na.rm= TRUE)
+
+test$runtime[is.na(test$runtime)] <- median(test$runtime, na.rm= TRUE)
+test$budget[is.na(test$budget)] <- median(test$budget, na.rm= TRUE)
+
+```
+
+##variable: title
+3 missing titles in test data. we will fill them with original_titles
+```{r}
+test$title[is.na(test$title)] = test$original_title[is.na(test$title)]
+```
+
+
+#Step 3: Fix data types: release_date
+Release_date is in weird format of M/D/Y.
+```{r }
+sum(is.na(train$release_date)) #check missing value
+sum(is.na(test$release_date))
+#check if year all in 2 digits format. if the last 3rd character of all observations is "/", it proves year all in 2 digits. 
+```
+There is no missing value in release_date in train. One date is missing in test. 
+It is in string format. However, the format is wrong because Years in the release_date only has 2 digits, and some days and months are in 2 digits, and some have 1 digit.
+We are going to mannualy search the release_date for the missing data, and then fix the release_date's format and data type.
+```{r }
+test[is.na(test$release_date),]$release_date="5/1/00"
+```
+
+```{r }
+#use separate to get month, day, year information
+train=separate(data =train, col=release_date,into=c("month", "day", "year"), sep = '/')
+train$month<-as.numeric(train$month)
+train$day <-as.numeric(train$day)
+train$year<- as.numeric(train$year)
+#fill release_year to 4 digits
+train[train$year>19,]$year <- train[train$year>19,]$year + 1900
+train[train$year<=19,]$year <- train[train$year<=19,]$year + 2000
+#fill month to 2 digits
+train[train$month<=9,]$month<-paste("0",train[train$month<=9,]$month,sep="")
+#fill day to 2 digits
+train[train$day<=9,]$day<-paste("0",train[train$day<=9,]$day,sep="")
+#replace release_date column with new date information
+train$release_date=paste(train$year,train$month,train$day,sep="-")
+```
+same work on test data:
+```{r }
+test=separate(data =test, col=release_date,into=c("month", "day", "year"), sep = '/')
+test$month<-as.numeric(test$month)
+test$day <-as.numeric(test$day)
+test$year<- as.numeric(test$year)
+#fill release_year to 4 digits
+test[test$year>19,]$year <- test[test$year>19,]$year + 1900
+test[test$year<=19,]$year <- test[test$year<=19,]$year + 2000
+#fill month to 2 digits
+test[test$month<=9,]$month<-paste("0",test[test$month<=9,]$month,sep="")
+#fill day to 2 digits
+test[test$day<=9,]$day<-paste("0",test[test$day<=9,]$day,sep="")
+#replace release_date column with new date information
+test$release_date=paste(test$year,test$month,test$day,sep="-")
+```
+Great! release_date is now in the right format. 
+We will add one more feature engeering based to check the week of the day based on date info:
+```{r }
+#check which day of the week
+train$week_day = weekdays(as.Date(train$release_date))
+train$month<-as.numeric(train$month)
+train$day <-as.numeric(train$day)
+train$year<- as.numeric(train$year)
+
+test$week_day = weekdays(as.Date(test$release_date))
+test$month<-as.numeric(test$month)
+test$day <-as.numeric(test$day)
+test$year<- as.numeric(test$year)
+
+#[graph]movie count by week of the day
+plot1<-train %>%
+  select(id,week_day,revenue)%>%
+  group_by(week_day)%>%
+  ggplot(aes(x=week_day))+
+  geom_bar()+
+  scale_x_discrete(limits=c("Monday","Tuesday","Wednesday","Thursday", "Friday","Saturday","Sunday"))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+plot2<-
+  train %>%
+  select(id,week_day,revenue)%>%
+  group_by(week_day)%>%
+  summarize(mean_revenue=mean(revenue))%>%
+  ggplot(aes(x=week_day,y=mean_revenue))+
+  geom_bar(stat="identity")+
+  scale_x_discrete(limits=c("Monday","Tuesday","Wednesday","Thursday", "Friday","Saturday","Sunday"))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  scale_y_continuous(labels = scales::comma)
+
+plot_grid(plot1, plot2,labels = "AUTO")
+```
+Most movie are released on Fridays. 
+However, the average movie revenue is the highest on Wednesdays instead of Fridays. Interesting!
+
+year and revenue; month and revenue
+```{r }
+#[graph]movie release count by year
+plot3<-train %>%
+   select(year)%>%
+  group_by(year)%>%
+  ggplot(aes(x=year))+
+  geom_bar()
+
+#[graph]movie release count by month
+plot4<-train %>%
+  select(month)%>%
+  group_by(month)%>%
+  ggplot(aes(x=month))+
+  geom_bar()
+  scale_x_discrete(limits=c("1","2","3","4","5","6","7","8","9","10","11","12"))
+
+plot_grid(plot3, plot4,labels = "AUTO")
+
+```
+
+```{r }
+#[graph]movie release year and revenue
+plot5<-train%>%
+  select(year, revenue)%>%
+  group_by(year)%>%
+  summarize(mean_revenue=mean(revenue))%>%
+  ggplot(aes(x=year, y=mean_revenue))+
+  geom_line()
+#positive correlation between release year and revenue(0.1379329)
+cor(train$year,train$revenue)
+cor.test(train$year, train$revenue)
+
+#[graph]movie release month and revenue
+plot6<- train%>%
+  select(month, revenue)%>%
+  group_by(month)%>%
+  summarize(mean_revenue=mean(revenue))%>%
+  ggplot(aes(x=month, y=mean_revenue))+
+  geom_line()
+
+plot_grid(plot5, plot6,labels = "AUTO")
+
+#correlation between release month and mean revenue is not strong or obvious
+cor(train$month,train$revenue)
+cor.test(train$month, train$revenue)
+
+```
+
+There is a positive correlation between release year and revenue(0.1379329). The relationship between month and revenue is unclear. 
+Extracting Values with Regular Expressions--"belongs_to_collection"
+
+
+#Step4: Dealing with strings in JSON format to get new useful variables
+##variable: belongs_to_collection
+We will transform variable "belongs_to_collection" because it contains a lot of information in one column including collection id, collection name, poster_path and backdrop_path. We assume that whether a movie belongs to a collection will influence its revenue. So we extract information from the string, and create two variables "collection_id" and "collection_name".
+```{r}
+library(stringr)
+train$collection_id <- str_extract(train$belongs_to_collection, "(?<=id\\'\\:\\s{1})\\d{1,}")
+train$collection_name <- str_extract(train$belongs_to_collection, "(?<=name\\'\\:\\s{1}\\').+(?=\\'\\,\\s{1}\\'poster)")
+```
+
+The new added two variables have lots of missing values.
+```{r}
+sum(is.na(train$collection_id))
+sum(is.na(train$collection_name))
+```
+Variable "collection_id" has more NAs.To check if there is error during the extracting process, I find out all the collection ids without names. 
+```{r}
+train[which(is.na(train$collection_name)&!is.na(train$collection_id)),"collection_id"]
+```
+
+I find that there is a problem of the regular expression. Some collection names are not in the standard format. I will revise the regular expression and re-run the step 2.
+```{r}
+train[which(train$collection_id=="91746"),"belongs_to_collection"]
+```
+
+```{r}
+train$collection_id <- str_extract(train$belongs_to_collection, "(?<=id\\'\\:\\s{1})\\d{1,}")
+train$collection_name <- str_extract(train$belongs_to_collection, "(?<=name\\'\\:\\s{1}).+(?=\\,\\s{1}\\'poster)")
+sum(is.na(train$collection_id))
+sum(is.na(train$collection_name))
+```
+
+Then, I am going to compare the average revenue of movies that are in collections and the average revenue of others.
+Based on the following graph, there is a huge gap of the mean revenue between in-collection movies and not-in-collection movies.
+```{r}
+collection <- train[!is.na(train$belongs_to_collection),]%>%
+  summarise(med = round(mean(revenue) / 1000000, digits = 0))
+  
+noCollection <- train[is.na(train$belongs_to_collection),] %>%
+  summarise(med = round(mean(revenue) / 1000000, digits = 0))
+  
+means <- rbind(collection, noCollection)
+
+means <- cbind(c("In Collection", "No Collection"), means)
+
+colnames(means) <- c("collection", "mean")
+
+library(ggplot2)
+ggplot(means, aes(x = collection, y = mean, fill = collection)) +
+  geom_bar(stat = "identity", color = "black", alpha = 0.8)+
+  theme_light() +
+  xlab("") +
+  ylab("Millions of dollars") +
+  ggtitle("Median Box Office Revenue For Movies\nIn Collections And Not In Collections") +
+  theme(legend.position="none")
+```
+
+Now I will drop the "collection_id" and "collection_name", and convert the values in the belongs_to_collection column from strings to a numerical value of 1 (is in a collection) and 0 (is not). 
+```{r}
+drop_collection=c("collection_id","collection_name")
+train[,drop_collection]<-list(NULL)
+train$belongs_to_collection<-ifelse(is.na(train$belongs_to_collection),0,1)
+test$belongs_to_collection<-ifelse(is.na(test$belongs_to_collection),0,1)
+
+```
+
+
+##variable:genres
+Extracting Values with Regular Expressions--"genres"
+The purpose of this part is to see if the numbers of genres and the types of genres can influence the revenue. Firstly, I will count the number of genres of each movie, and then I will create several new variables to reshape the information related to genres.
+```{r}
+library(ggplot2)
+genreCount <-  ifelse(is.na(train$genres),0,str_count(train$genres, "\\}")) # each genre is followed by a "}"
+train$numberOfGenres <- genreCount
+numberOfSplitCols <- max(na.omit(genreCount))  # to find out the max number of genres of a single movie, the result is 7
+
+genreCount %>%
+  as.data.frame(stringsAsFactors = F) %>%     # convert genreCount (a vector) into a data frame
+  ggplot(aes(genreCount)) +
+  geom_histogram(stat = "count",
+                 fill="orange",
+                 color = "black",
+                 alpha = 0.85) +
+  scale_x_discrete(limits=0:numberOfSplitCols) +
+  theme_light() +
+  xlab("Number Of Genres Per Movie") +
+  ylab("Number Of Movies") +
+  ggtitle("Histogram Of Number Of Genres Per Movie")  # seven movies have 0 genres
+```
+Train dataset has 7 observations with NA for "genres", and test dataset has 16 NAs.
+```{r}
+sum(is.na(train$genres))
+sum(is.na(test$genres))
+train%>%
+  filter(is.na(numberOfGenres))%>%
+  count()
+```
+
+```{r}
+genresSplit <- as.data.frame(str_split_fixed(train$genres, "\\}\\,\\s\\{", numberOfSplitCols), stringsAsFactors = F)
+
+genreIds <- as.data.frame(sapply(genresSplit, function(x) str_extract(x, "(?<=id\\'\\:\\s{1})\\d{1,}")), stringsAsFactors = F)
+genreIds <- as.data.frame(sapply(genreIds, function(x) as.numeric(x)), stringsAsFactors = F)
+genreIds[is.na(genreIds)] <- ""
+
+genreNames <- as.data.frame(sapply(genresSplit, function(x) str_extract(x, "(?<=name\\'\\:\\s{1}\\').+(?=\\')")), stringsAsFactors = F)
+genreNames[is.na(genreNames)] <- ""
+
+# break up the table to find out the most common genre in the dataset
+gs <- as.data.frame(table(unlist(genreNames)), stringsAsFactors = F)
+gs <- gs[2:nrow(gs),]  # drop the ""
+
+# there are 20 different tags of genres
+ggplot(data=gs, aes(x = reorder(Var1, Freq),
+             y = Freq,
+             fill = Var1)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_light() +
+  xlab("") +
+  ylab("Number Of Movies") +
+  ggtitle("Number of Movies Containing Specific Tag") +
+  theme(legend.position="none")
+```
+
+Now I will convert the information in the genres column to 20 numerical variables, value of 1 (is in this genre) and 0 (is not). Same conduction has been done to test dataset. I will also drop "genres".
+```{r}
+library(plyr)
+n=nrow(gs)
+for (i in 1:n)
+{
+  train$i=grepl(as.character(gs$Var1[i]),train$genres, ignore.case = T)
+  train$i[train$i==TRUE]=1
+  train$i[train$i==FALSE]=0
+  a=as.character(gs$Var1[i])
+  train=rename(train,c(i=a))
+}
+  
+genreCount_test <- str_count(test$genres, "\\}")  # each genre is followed by a "}"
+test$numberOfGenres <- genreCount_test
+test$numberOfGenres[is.na(test$genres)] <- 0
+numberOfSplitCols_test <- max(na.omit(genreCount_test))  # to find out the max number of genres of a single movie, the result is 8
+
+for (i in 1:n)
+{
+  test$i=grepl(as.character(gs$Var1[i]),test$genres, ignore.case = T)
+  test$i[test$i==TRUE]=1
+  test$i[test$i==FALSE]=0
+  a=as.character(gs$Var1[i])
+  test=rename(test,c(i=a))
+}
+
+train[,"genres"]<-list(NULL)
+test[,"genres"]<-list(NULL)
+```
+
+
+##dealing with missing value: filling in the missing value of genres.
+```{r}
+train[which(train$"id"==1815),"Comedy"]=1
+train[which(train$"id"==2424),"Drama"]=1
+train[which(train$"id"==2424),"Action"]=1
+train[which(train$"id"==471),"Drama"]=1
+train[which(train$"id"==471),"Adventure"]=1
+train[which(train$"id"==2687),"Drama"]=1
+train[which(train$"id"==2687),"Crime"]=1
+train[which(train$"id"==2687),"Thriller"]=1
+train[which(train$"id"==1820),"Drama"]=1
+train[which(train$"id"==1820),"Romance"]=1
+train[which(train$"id"==2901),"Fantasy"]=1
+train[which(train$"id"==2901),"Drama"]=1
+train[which(train$"id"==1623),"Thriller"]=1
+train[which(train$"id"==1623),"Comedy"]=1
+
+test[which(test$"id"==3074),"Thriller"]=1
+test[which(test$"id"==3074),"Drama"]=1
+test[which(test$"id"==3794),"Drama"]=1
+test[which(test$"id"==3911),"Drama"]=1
+test[which(test$"id"==4222),"Drama"]=1
+test[which(test$"id"==4222),"Action"]=1
+test[which(test$"id"==4443),"Drama"]=1
+test[which(test$"id"==4616),"Comedy"]=1
+test[which(test$"id"==4965),"Action"]=1
+test[which(test$"id"==5063),"Drama"]=1
+test[which(test$"id"==5063),"Crime"]=1
+test[which(test$"id"==5119),"Drama"]=1
+test[which(test$"id"==5214),"Documentary"]=1
+test[which(test$"id"==5214),"Family"]=1
+test[which(test$"id"==5252),"Comedy"]=1
+test[which(test$"id"==5520),"Mystery"]=1
+test[which(test$"id"==5520),"Comedy"]=1
+test[which(test$"id"==5520),"Crime"]=1
+test[which(test$"id"==6450),"Drama"]=1
+test[which(test$"id"==6450),"Comedy"]=1
+test[which(test$"id"==6486),"Comedy"]=1
+test[which(test$"id"==6565),"Documentary"]=1
+test[which(test$"id"==6818),"Drama"]=1
+
+
+
+```
+
+##variable: "cast" and "crew"
+The purpose of this part is to see if the numbers of casts and crews can influence the revenue. Firstly, I will count the number of casts and crews of each movie, and then I will create several new variables to reshape the information related to casts and crews.
+```{r}
+castCount <- str_count(train$cast, "\\}")  # each genre is followed by a "}"
+train$numberOfcasts <- castCount
+train$numberOfcasts[is.na(train$numberOfcasts)] <- 0
+MaxNumberOfcasts <- max(na.omit(castCount))  # to find out the max number of casts of a single movie, the result is 156
+
+castCount_test <- str_count(test$cast, "\\}")  # each genre is followed by a "}"
+test$numberOfcasts <- castCount_test
+test$numberOfcasts[is.na(test$numberOfcasts)] <- 0
+MaxNumberOfcasts_test <- max(na.omit(castCount_test))  # to find out the max number of casts of a single movie, the result is 165
+
+```
+
+
+```{r}
+train%>%
+  ggplot(aes(x=numberOfcasts, y=revenue))+
+  geom_point(color="orange")+
+  geom_smooth(method = lm)+
+  xlab("Number Of Casts") +
+  ylab("Revenue") +
+  ggtitle("Revenue depending on number of casts")
+```
+
+The observations that have error in the "cast" variable.
+```{r}
+sum(is.na(train$cast))
+sum(is.na(test$cast))
+```
+
+```{r}
+crewCount <- str_count(train$crew, "\\}")  # each genre is followed by a "}"
+train$numberOfcrews <- crewCount
+train$numberOfcrews[is.na(train$crew)]<-0
+MaxNumberOfcrew <- max(na.omit(crewCount))  # to find out the max number of casts of a single movie, the result is 194
+
+crewCount_test <- str_count(test$crew, "\\}")  # each genre is followed by a "}"
+test$numberOfcrews <- crewCount_test
+test$numberOfcrews[is.na(test$crew)]<-0
+MaxNumberOfcrew_test <- max(na.omit(crewCount_test))  # to find out the max number of casts of a single movie, the result is 182
+```
+
+```{r}
+train%>%
+  ggplot(aes(x=numberOfcrews, y=revenue))+
+  geom_point(color="orange")+
+  geom_smooth(method = lm)+
+  xlab("Number Of Crews") +
+  ylab("Revenue") +
+  ggtitle("Revenue depending on number of crews")
+```
+
+##variable: production_companies
+Extracting Values with Regular Expressions--"production_companies"
+The purpose of this step is to find out the influence of the number of production companies, and whether the movie was producted by big name companies.
+Firstly, I count the number of production companies of each movie.
+Secondly, I select the companies that have produced more than 50 movies, and create 11 new variables to show if the movie was produced by these companies.
+```{r}
+companyCount <- str_count(train$production_companies, "\\}")  
+train$numberOfcompanies <- companyCount
+train$numberOfcompanies[is.na(train$production_companies)]<- 0
+companyCount_test <- str_count(test$production_companies, "\\}")  
+test$numberOfcompanies <- companyCount_test
+test$numberOfcompanies[is.na(test$production_companies)]<- 0
+summary(companyCount)
+summary(companyCount_test)
+```
+
+```{r}
+companySplit <- as.data.frame(str_split_fixed(train$production_companies, "\\}\\,\\s\\{", companyCount), stringsAsFactors = F)
+
+companyIds <- as.data.frame(sapply(companySplit, function(x) str_extract(x, "(?<=id\\'\\:\\s{1})\\d{1,}")), stringsAsFactors = F)
+companyIds <- as.data.frame(sapply(companyIds, function(x) as.numeric(x)), stringsAsFactors = F)
+companyIds[is.na(companyIds)] <- ""
+
+companyNames <- as.data.frame(sapply(companySplit, function(x) str_extract(x, "(?<=name\\'\\:\\s{1}\\').+(?=\\'\\,)")), stringsAsFactors = F)
+companyNames[is.na(companyNames)] <- ""
+
+# break up the table to find out the most common production companies in the dataset
+pcs <- as.data.frame(table(unlist(companyNames)), stringsAsFactors = F)
+pcs <- pcs[2:nrow(pcs),]  # drop the ""
+
+summary(pcs$Freq)
+
+# there are 3668 different tags of production companies, and I will select the companies that has produced more than 50 and 100 movies.
+pcs_top11=pcs%>%filter(Freq>=50)
+ggplot(data=pcs_top11, aes(x = reorder(Var1, Freq),
+             y = Freq,
+             fill = Var1)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_light() +
+  xlab("") +
+  ylab("Production Companies Of Movies") +
+  ggtitle("Number of Movies Produced by top 11 companies(produced more than 50 movies)") +
+  theme(legend.position="none")
+
+pcs_top4=pcs%>%filter(Freq>=100)
+ggplot(data=pcs_top4, aes(x = reorder(Var1, Freq),
+             y = Freq,
+             fill = Var1)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_light() +
+  xlab("") +
+  ylab("Production Companies Of Movies") +
+  ggtitle("Number of Movies Produced by top 4 companies(produced more than 100 movies)") +
+  theme(legend.position="none")
+```
+
+```{r}
+n=nrow(pcs_top11)
+for (i in 1:n)
+{
+  train$i=grepl(as.character(pcs_top11$Var1[i]),train$production_companies, ignore.case = T)
+  train$i[train$i==TRUE]=1
+  train$i[train$i==FALSE]=0
+  a=as.character(pcs_top11$Var1[i])
+  train=rename(train,c(i=a))
+}
+  
+for (i in 1:n)
+{
+  test$i=grepl(as.character(pcs_top11$Var1[i]),test$production_companies, ignore.case = T)
+  test$i[test$i==TRUE]=1
+  test$i[test$i==FALSE]=0
+  a=as.character(pcs_top11$Var1[i])
+  test=rename(test,c(i=a))
+}
+```
+
+##variable: production_countries
+Extracting Values with Regular Expressions--"production_countries"
+Creating a new varibale to show how many countries each movie was produced in.
+```{r}
+countriesCount <- str_count(train$production_countries, "\\}")  
+train$numberOfcoun <- countriesCount
+train$numberOfcoun[is.na(train$production_countries)]<-0
+
+countriesCount_test <- str_count(test$production_countries, "\\}")  
+test$numberOfcoun <- countriesCount_test
+test$numberOfcoun[is.na(test$production_countries)]<-0
+
+summary(countriesCount)
+summary(countriesCount_test)
+```
+
+
+##variable: "spoken_languages"
+Extracting Values with Regular Expressions--"spoken_languages"
+Creating a new varibale to show how many different languages each movie was produced in.
+```{r}
+lanCount <- str_count(train$spoken_languages, "\\}")  
+train$numberOflang <- lanCount
+train$numberOflang[is.na(train$spoken_languages)] <- 0
+summary(train$numberOflang)
+
+lanCount_test <- str_count(test$spoken_languages, "\\}")  
+test$numberOflang <- lanCount_test
+test$numberOflang[is.na(test$spoken_languages)] <- 0
+
+summary(lanCount)
+summary(lanCount_test)
+```
+Some movies have more than 1 language. Does more languages lead to more revenue?
+No correlation is observed. We will drop this variable. 
+
+##variable: status
+As for variable "status", there are two levels in train dataset, however, 4 levels in test dataset. Variance of levels will negatively influence the predictive model. Thus, I create a new variable with only two levels, is released(1) and not released(0).
+```{r}
+train$status=as.factor(train$status)
+levels(train$status)
+test$status=as.factor(test$status)
+levels(test$status)
+
+train$is_released[train$status=="Released"]=1
+train$is_released[train$status!="Released"]=0
+count(train$is_released==0)
+
+test$is_released[test$status=="Released"]=1
+test$is_released[test$status!="Released"| is.na(test$status)]=0
+count(test$is_released==0)
+```
+
+
+#Step 5: Rescaling variables
+Normalization and Standardization:
+In this dataset, there are various numeric variables that will influence the movies' revenue. However, these variables scale from single digits to millions. The coefficient of variables in lower scale, such as popularity, will be covered by the coefficient of variables in higher scale, such as budget.Therefore, in this step, I am going to normalize and standardize all the numeric variables using z-score scaling.
+```{r}
+train$budget2=scale(train$budget,center=T,scale=T) 
+train$popularity2=scale(train$popularity,center=T,scale=T) 
+train$runtime2=scale(train$runtime,center=T,scale=T) 
+train$numberOfGenres2=scale(train$numberOfGenres,center=T,scale=T) 
+train$numberOfcasts2=scale(train$numberOfcasts,center=T,scale=T) 
+train$numberOfcrews2=scale(train$numberOfcrews,center=T,scale=T) 
+train$numberOfcompanies2=scale(train$numberOfcompanies,center=T,scale=T) 
+train$numberOflang2=scale(train$numberOflang,center=T,scale=T) 
+train$numberOfcoun2=scale(train$numberOfcoun,center=T,scale=T) 
+
+train$revenue2=scale(train$revenue,center=T,scale=T) 
+
+test$budget2=scale(test$budget,center=T,scale=T) 
+test$popularity2=scale(test$popularity,center=T,scale=T) 
+test$runtime2=scale(test$runtime,center=T,scale=T) 
+test$numberOfGenres2=scale(test$numberOfGenres,center=T,scale=T) 
+test$numberOfcasts2=scale(test$numberOfcasts,center=T,scale=T) 
+test$numberOfcrews2=scale(test$numberOfcrews,center=T,scale=T) 
+test$numberOfcompanies2=scale(test$numberOfcompanies,center=T,scale=T) 
+test$numberOflang2=scale(test$numberOflang,center=T,scale=T) 
+test$numberOfcoun2=scale(test$numberOfcoun,center=T,scale=T)
+```
+
+
+#Step 6: Dropping variables
+Remove irrelevant variables from the dataset: "homepage", "imdb_id", "original_title", "poster_path". For some variables, we have created useful new data already so we will also drop original variables. We will also drop variables that we don't have proper methods to retrieve information yet, such as "cast".
+```{r}
+drop_var=c("homepage", "imdb_id","poster_path")
+train[,drop_var] <- list(NULL)
+test[,drop_var] <- list(NULL)
+train[,"genres"]<-list(NULL)
+test[,"genres"]<-list(NULL)
+drop_var2=c("production_companies","production_countries","spoken_languages","status","crew","keywords", "cast","day") 
+train[,drop_var2]<-list(NULL)
+test[,drop_var2]<-list(NULL)
+```
+
+After cleaning, now we don't have any missing values in numeric values. We only have missing values in string variables "overview","tagline" and "Keywords", which is fine, because we cannot immpute string, and we will conduct sentiment analysis on them in the future in project 2. 
+```{r}
+colnames(train)[colSums(is.na(train)) > 0]
+colnames(test)[colSums(is.na(test)) > 0]
+```
+
+
+```{r}
+write.csv(train,file="train_clean.csv")
+write.csv(test,file="test_clean.csv")
+```
