@@ -1,5 +1,5 @@
 # Project 2: TMDB Box Office Prediction: Predict Movie Revenue
-### Programming Language: R
+Programming Language: R
 
 ## Overview:
 In this TMDB Box Office Prediction project, We aimed at predicting the revenue for movies using some attributes of movies. We tried several techniques including random forest, text mining, extreme gradient boosting, clustering, neural network, and SVM. Finally, we learned that xgboost with text mining is the best one. 
@@ -12,9 +12,12 @@ Please read tmdb_prediction_dataCleaning&EDA.Rmd
   * Extract texts from JSON format using regular expression
   * Fixed date format from unusual date format
   
-## Predictive Model: XGBoost
+  
+  
+## Further Data Preparation and Predictive Model Building
 Please read tmdb_FinalAnalysis.html	Final Analysis Code Part II
-
+* Dummy Encoding
+* Predictive Model: XGBoost
 
 More Background:
 ## Statement of the problem or question(s) being addressed
