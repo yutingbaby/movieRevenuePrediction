@@ -15,15 +15,15 @@ See: tmdb_prediction_dataCleaning&EDA.Rmd
   * Fixed data types including using math calculation to get the right date from a unusual date format
  
 ## Text Mining
-See [Rmarkdown](https://htmlpreview.github.io/?https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Final.textmining.EDA.html)
+Please see [Final.textmining.EDA.html](https://htmlpreview.github.io/?https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Final.textmining.EDA.html)
 * Sentiment Analysis of variable "Overview" 
 * Keyword Extration from "Overview", kept the top 20 words from TFIDF result
 
 ## Predictive Model Building
-Please read https://htmlpreview.github.io/?https://github.com/yutinggong/Project2movieRevenuePrediction/blob/master/tmdb_FinalAnalysis.html
+Please see [xxx](https://htmlpreview.github.io/?https://github.com/yutinggong/Project2movieRevenuePrediction/blob/master/tmdb_FinalAnalysis.html)
 * Dummy Encoding
 * Predictive Model: XGBoost
-* Other experimented models: please read https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Working%20R.model.html
+* Other experimented models: please [see](https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Working%20R.model.html)
 
 
 For more analysis details, please read the project on my website (https://yutinggong.github.io/).
