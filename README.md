@@ -20,7 +20,7 @@ Please see [Final.textmining.EDA.html](https://htmlpreview.github.io/?https://ra
 * Keyword Extration from "Overview", kept the top 20 words from TFIDF result
 
 ## Predictive Model Building
-Please see [xxx](https://htmlpreview.github.io/?https://github.com/yutinggong/Project2movieRevenuePrediction/blob/master/tmdb_FinalAnalysis.html)
+Please see [tmdb_FinalAnalysis.html](https://htmlpreview.github.io/?https://github.com/yutinggong/Project2movieRevenuePrediction/blob/master/tmdb_FinalAnalysis.html)
 * Dummy Encoding
 * Predictive Model: XGBoost
 * Other experimented models: please [see](https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Working%20R.model.html)
