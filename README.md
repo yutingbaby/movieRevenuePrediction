@@ -8,14 +8,14 @@ For this project, we studied metadata on over 7,000 past films and applied EDA a
 We tried several techniques including random forest, text mining, extreme gradient boosting, clustering, neural network, and SVM. Our best model (xgboost with text mining) reached a rmsle of 2.1.
 
 ## Data Cleaning and EDA
-Please read tmdb_prediction_dataCleaning&EDA.Rmd
+See: tmdb_prediction_dataCleaning&EDA.Rmd
 * Exploratatry Data Analysis on key variables: used Matplotlib
 * Data Cleaning
   * Extract useful text information from JSON format using regular expression
   * Fixed data types including using math calculation to get the right date from a unusual date format
  
 ## Text Mining
-Please read https://htmlpreview.github.io/?https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Final.textmining.EDA.html
+See [Rmarkdown] (https://htmlpreview.github.io/?https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Final.textmining.EDA.html)
 * Sentiment Analysis of variable "Overview" 
 * Keyword Extration from "Overview", kept the top 20 words from TFIDF result
 
