@@ -11,8 +11,8 @@ We tried several techniques including random forest, text mining, extreme gradie
 Please read tmdb_prediction_dataCleaning&EDA.Rmd
 * Exploratatry Data Analysis: used Matplotlib
 * Data Cleaning
-  * Extract texts from JSON format using regular expression
-  * Fixed date format from unusual date format
+  * Extract useful text information from JSON format using regular expression
+  * Fixed data type including use math to calculate the right date from a unusual date format
   
 ## Further Data Preparation and Predictive Model Building
 Please read tmdb_FinalAnalysis.html	Final Analysis Code Part II
