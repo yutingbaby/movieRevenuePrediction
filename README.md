@@ -15,7 +15,7 @@ See: tmdb_prediction_dataCleaning&EDA.Rmd
   * Fixed data types including using math calculation to get the right date from a unusual date format
  
 ## Text Mining
-See [Rmarkdown] (https://htmlpreview.github.io/?https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Final.textmining.EDA.html)
+See [Rmarkdown](https://htmlpreview.github.io/?https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Final.textmining.EDA.html)
 * Sentiment Analysis of variable "Overview" 
 * Keyword Extration from "Overview", kept the top 20 words from TFIDF result
 
