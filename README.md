@@ -9,13 +9,18 @@ We tried several techniques including random forest, text mining, extreme gradie
 
 ## Data Cleaning and EDA
 Please read tmdb_prediction_dataCleaning&EDA.Rmd
-* Exploratatry Data Analysis: used Matplotlib
+* Exploratatry Data Analysis on key variables: used Matplotlib
 * Data Cleaning
   * Extract useful text information from JSON format using regular expression
-  * Fixed data type including use math to calculate the right date from a unusual date format
-  
-## Further Data Preparation and Predictive Model Building
-Please read tmdb_FinalAnalysis.html	Final Analysis Code Part II
+  * Fixed data types including using math calculation to get the right date from a unusual date format
+ 
+## Text Mining
+Please read .....
+* Sentiment Analysis of variable "Overview" 
+* Keyword Extration from "Overview", kept the top 20 words from TFIDF result
+
+## Predictive Model Building
+Please read https://htmlpreview.github.io/?https://github.com/yutinggong/Project2movieRevenuePrediction/blob/master/tmdb_FinalAnalysis.html
 * Dummy Encoding
 * Predictive Model: XGBoost
 
