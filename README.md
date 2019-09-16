@@ -23,7 +23,7 @@ Please see [Final.textmining.EDA.html](https://htmlpreview.github.io/?https://ra
 Please see [tmdb_FinalAnalysis.html](https://htmlpreview.github.io/?https://github.com/yutinggong/Project2movieRevenuePrediction/blob/master/tmdb_FinalAnalysis.html)
 * Dummy Encoding
 * Predictive Model: XGBoost
-* Other experimented models: please see [Working R.model.html](https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Working%20R.model.html)
+* Other experimented models: please see [Working R.model.html](https://htmlpreview.github.io/?https://raw.githubusercontent.com/yutinggong/Project2movieRevenuePrediction/master/Working%20R.model.html)
 
 
 For more analysis details, please read the project on my website (https://yutinggong.github.io/).
